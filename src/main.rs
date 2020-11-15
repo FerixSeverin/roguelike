@@ -1,18 +1,14 @@
 mod config;
 mod turn;
 mod world;
+mod mobility;
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
-use std::collections::HashMap;
-use std::time::Duration;
 
 //Events
 
 //Globals
-
-const ARENA_HEIGHT: u32 = 10;
-const ARENA_WIDTH: u32 = 10;
 
 #[derive(PartialEq, Copy, Clone)]
 enum Direction {
@@ -49,34 +45,6 @@ struct Materials {
 
 struct Pit;
 
-struct Walkable {
-    step_size: i32,
-}
-
-struct Blocking;
-
-#[derive(Hash, Eq, Default, Copy, Clone, PartialEq)]
-struct Position {
-    x: i32,
-    y: i32,
-}
-
-impl Position {
-    pub fn zero() -> Self {
-        Self { x: 0, y: 0 }
-    }
-
-    pub fn teleport(&mut self, x: i32, y: i32) {
-        self.x = x;
-        self.y = y;
-    }
-
-    pub fn translate(&mut self, x: i32, y: i32) {
-        self.x += x;
-        self.y += y;
-    }
-}
-
 struct Player {
     direction: Direction,
 }
@@ -91,6 +59,8 @@ struct Model {
     name: String,
     serial_number: String,
 }
+
+// Systems
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.spawn((turn::Counter {}, turn::InQueue));
@@ -124,8 +94,8 @@ fn world_setup(
                             sprite: Sprite::new(Vec2::new(20.0, 20.0)),
                             ..Default::default()
                         })
-                        .with(Blocking)
-                        .with(Position {
+                        .with(mobility::Blocking)
+                        .with(mobility::Position {
                             x: x as i32,
                             y: y as i32,
                         });
@@ -140,11 +110,11 @@ fn world_setup(
                         .with(Player {
                             direction: Direction::Up,
                         })
-                        .with(Position {
+                        .with(mobility::Position {
                             x: x as i32,
                             y: y as i32,
                         })
-                        .with(Walkable { step_size: 1 })
+                        .with(mobility::Walkable { step_size: 1 })
                         .with(Health { value: 20 })
                         .with(turn::InQueue)
                         .with(turn::Head);
@@ -158,7 +128,7 @@ fn world_setup(
                             ..Default::default()
                         })
                         .with(Pit)
-                        .with(Position {
+                        .with(mobility::Position {
                             x: x as i32,
                             y: y as i32,
                         });
@@ -171,11 +141,11 @@ fn world_setup(
                             ..Default::default()
                         })
                         .with(Evil)
-                        .with(Position {
+                        .with(mobility::Position {
                             x: x as i32,
                             y: y as i32,
                         })
-                        .with(Walkable { step_size: 1 })
+                        .with(mobility::Walkable { step_size: 1 })
                         .with(Health { value: 5 })
                         .with(Model {
                             name: "E1-L".to_string(),
@@ -200,11 +170,11 @@ fn player_movement(
     mut players: Query<(
         Entity,
         &mut Player,
-        &Walkable,
-        &mut Position,
+        &mobility::Walkable,
+        &mut mobility::Position,
         &mut turn::Head,
     )>,
-    walls: Query<(Entity, &Blocking, &Position)>,
+    walls: Query<(Entity, &mobility::Blocking, &mobility::Position)>,
 ) {
     for (player_entity, mut _player, walkable, mut position, _head) in players.iter_mut() {
         let mut attempted_to_walk = false;
@@ -230,7 +200,7 @@ fn player_movement(
 
         if attempted_to_walk {
             for (wall_entity, _blocking, &wall_position) in walls.iter() {
-                if wall_position.eq(&Position {
+                if wall_position.eq(&mobility::Position {
                     x: position.x + position_change.0,
                     y: position.y + position_change.1,
                 }) {
@@ -251,7 +221,7 @@ fn player_movement(
     }
 }
 
-fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
+fn position_translation(windows: Res<Windows>, mut q: Query<(&mobility::Position, &mut Transform)>) {
     fn convert(p: i32, position_multiplier: i32) -> i32 {
         p * position_multiplier
     }
@@ -264,14 +234,14 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 
 fn pit_mechanic(
     mut commands: Commands,
-    pits: Query<(Entity, &Pit, &Position)>,
-    mut walkable_entities: Query<(Entity, &mut Walkable, &Position)>,
+    pits: Query<(Entity, &Pit, &mobility::Position)>,
+    mut walkable_entities: Query<(Entity, &mut mobility::Walkable, &mobility::Position)>,
 ) {
     for (pit_entity, _pit, pit_positon) in pits.iter() {
         for (walkable_entity, _walkable, walking_position) in walkable_entities.iter_mut() {
             if pit_positon.eq(walking_position) {
                 println!("Fell into pit");
-                commands.remove_one::<Walkable>(walkable_entity);
+                commands.remove_one::<mobility::Walkable>(walkable_entity);
             }
         }
     }
@@ -285,7 +255,7 @@ fn get_legs(
     for (player_entity, _player) in players.iter_mut() {
         if keyboard_input.just_pressed(KeyCode::X) {
             println!("Got legs");
-            commands.insert_one(player_entity, Walkable { step_size: 1 });
+            commands.insert_one(player_entity, mobility::Walkable { step_size: 1 });
         }
     }
 }
