@@ -2,6 +2,7 @@ mod config;
 mod turn;
 mod world;
 mod mobility;
+mod character;
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
@@ -9,14 +10,6 @@ use bevy::render::pass::ClearColor;
 //Events
 
 //Globals
-
-#[derive(PartialEq, Copy, Clone)]
-enum Direction {
-    Left,
-    Up,
-    Right,
-    Down,
-}
 
 struct Size {
     width: f32,
@@ -44,16 +37,6 @@ struct Materials {
 //Components
 
 struct Pit;
-
-struct Player {
-    direction: Direction,
-}
-
-struct Evil;
-
-struct Health {
-    value: i32,
-}
 
 struct Model {
     name: String,
@@ -107,15 +90,13 @@ fn world_setup(
                             sprite: Sprite::new(Vec2::new(20.0, 20.0)),
                             ..Default::default()
                         })
-                        .with(Player {
-                            direction: Direction::Up,
-                        })
+                        .with(character::Player)
                         .with(mobility::Position {
                             x: x as i32,
                             y: y as i32,
                         })
                         .with(mobility::Walkable { step_size: 1 })
-                        .with(Health { value: 20 })
+                        .with(character::Attributes::new(20))
                         .with(turn::InQueue)
                         .with(turn::Head);
                     turn_queue.add_zero(commands.current_entity().unwrap());
@@ -140,13 +121,13 @@ fn world_setup(
                             sprite: Sprite::new(Vec2::new(18.0, 18.0)),
                             ..Default::default()
                         })
-                        .with(Evil)
+                        .with(character::Evil)
                         .with(mobility::Position {
                             x: x as i32,
                             y: y as i32,
                         })
                         .with(mobility::Walkable { step_size: 1 })
-                        .with(Health { value: 5 })
+                        .with(character::Attributes::new(5))
                         .with(Model {
                             name: "E1-L".to_string(),
                             serial_number: "XXXXXX-XX".to_string(),
@@ -169,7 +150,7 @@ fn player_movement(
     mut events: ResMut<Events<turn::Done>>,
     mut players: Query<(
         Entity,
-        &mut Player,
+        &mut character::Player,
         &mobility::Walkable,
         &mut mobility::Position,
         &mut turn::Head,
@@ -250,7 +231,7 @@ fn pit_mechanic(
 fn get_legs(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
-    mut players: Query<(Entity, &Player)>,
+    mut players: Query<(Entity, &character::Player)>,
 ) {
     for (player_entity, _player) in players.iter_mut() {
         if keyboard_input.just_pressed(KeyCode::X) {

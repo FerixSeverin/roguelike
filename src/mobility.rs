@@ -1,3 +1,13 @@
+// Globals
+
+#[derive(PartialEq, Copy, Clone)]
+enum Direction {
+    Left,
+    Up,
+    Right,
+    Down,
+}
+
 // Components
 
 pub struct Walkable {
