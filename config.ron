@@ -1,0 +1,5 @@
+(
+    window_size: (1000, 1000),
+    window_title: "Roguelike",
+    fullscreen: false
+)

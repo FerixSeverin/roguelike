@@ -1,0 +1,423 @@
+mod config;
+mod turn;
+mod world;
+
+use bevy::prelude::*;
+use bevy::render::pass::ClearColor;
+use std::collections::HashMap;
+use std::time::Duration;
+
+//Events
+
+//Globals
+
+const ARENA_HEIGHT: u32 = 10;
+const ARENA_WIDTH: u32 = 10;
+
+#[derive(PartialEq, Copy, Clone)]
+enum Direction {
+    Left,
+    Up,
+    Right,
+    Down,
+}
+
+struct Size {
+    width: f32,
+    height: f32,
+}
+
+impl Size {
+    pub fn square(x: f32) -> Self {
+        Self {
+            width: x,
+            height: x,
+        }
+    }
+}
+
+//Materials
+
+struct Materials {
+    player: Handle<ColorMaterial>,
+    wall: Handle<ColorMaterial>,
+    pit: Handle<ColorMaterial>,
+    evil: Handle<ColorMaterial>,
+}
+
+//Components
+
+struct Pit;
+
+struct Walkable {
+    step_size: i32,
+}
+
+struct Blocking;
+
+#[derive(Hash, Eq, Default, Copy, Clone, PartialEq)]
+struct Position {
+    x: i32,
+    y: i32,
+}
+
+impl Position {
+    pub fn zero() -> Self {
+        Self { x: 0, y: 0 }
+    }
+
+    pub fn teleport(&mut self, x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
+
+    pub fn translate(&mut self, x: i32, y: i32) {
+        self.x += x;
+        self.y += y;
+    }
+}
+
+struct Player {
+    direction: Direction,
+}
+
+struct Evil;
+
+struct Health {
+    value: i32,
+}
+
+struct Model {
+    name: String,
+    serial_number: String,
+}
+
+/*fn game_setup (
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<ColorMaterial>>
+) {
+    commands
+        .spawn(UiCameraComponents::default())
+        .spawn(NodeComponents {
+            style: Style {
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+                ..Default::default()
+            },
+            material: materials.add(Color::NONE.into()),
+            ..Default::default()
+        })
+        .with_children(|parent| {
+            parent
+                .spawn(TextComponents {
+                    text: Text {
+                        value: "Start".to_string(),
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        style: TextStyle {
+                            font_size: 40.0,
+                            color: Color::WHITE
+                        }
+                    },
+                    ..Default::default()
+                })
+                .spawn(TextComponents {
+                    text: Text {
+                        value: "Exit".to_string(),
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        style: TextStyle {
+                            font_size: 40.0,
+                            color: Color::WHITE
+                        }
+                    },
+                    ..Default::default()
+                });
+        });
+}
+
+fn blue_text(
+    mut text_query: Query<&mut TextComponents>
+) {
+    for mut text_comp in text_query.iter_mut() {
+        text_comp.text.style.color = Color::BLUE;
+    }
+}*/
+
+fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+    commands.spawn((turn::Counter {}, turn::InQueue));
+    commands.insert_resource(turn::Queue::new(commands.current_entity().unwrap()));
+
+    commands.spawn(Camera2dComponents::default());
+    commands.insert_resource(Materials {
+        player: materials.add(Color::rgb_u8(0, 163, 204).into()),
+        wall: materials.add(Color::rgb_u8(217, 217, 217).into()),
+        pit: materials.add(Color::rgb_u8(64, 64, 64).into()),
+        evil: materials.add(Color::rgb_u8(237, 76, 47).into()),
+    });
+}
+
+fn world_setup(
+    mut commands: Commands,
+    mut turn_queue: ResMut<turn::Queue>,
+    materials: Res<Materials>,
+) {
+    let w: world::World = world::load_world(format!("{}/world.ron", env!("CARGO_MANIFEST_DIR")));
+    let mut y: isize = (w.get().len() - 1) as isize;
+    for row in w.get() {
+        for (x, tile) in row.chars().enumerate() {
+            //let mut sprite_component: SpriteComponents;
+            match tile {
+                '.' => continue,
+                '#' => {
+                    commands
+                        .spawn(SpriteComponents {
+                            material: materials.wall.clone(),
+                            sprite: Sprite::new(Vec2::new(20.0, 20.0)),
+                            ..Default::default()
+                        })
+                        .with(Blocking)
+                        .with(Position {
+                            x: x as i32,
+                            y: y as i32,
+                        });
+                }
+                '@' => {
+                    commands
+                        .spawn(SpriteComponents {
+                            material: materials.player.clone(),
+                            sprite: Sprite::new(Vec2::new(20.0, 20.0)),
+                            ..Default::default()
+                        })
+                        .with(Player {
+                            direction: Direction::Up,
+                        })
+                        .with(Position {
+                            x: x as i32,
+                            y: y as i32,
+                        })
+                        .with(Walkable { step_size: 1 })
+                        .with(Health { value: 20 })
+                        .with(turn::InQueue)
+                        .with(turn::Head);
+                    turn_queue.add_zero(commands.current_entity().unwrap());
+                }
+                'P' => {
+                    commands
+                        .spawn(SpriteComponents {
+                            material: materials.pit.clone(),
+                            sprite: Sprite::new(Vec2::new(15.0, 15.0)),
+                            ..Default::default()
+                        })
+                        .with(Pit)
+                        .with(Position {
+                            x: x as i32,
+                            y: y as i32,
+                        });
+                }
+                'E' => {
+                    commands
+                        .spawn(SpriteComponents {
+                            material: materials.evil.clone(),
+                            sprite: Sprite::new(Vec2::new(18.0, 18.0)),
+                            ..Default::default()
+                        })
+                        .with(Evil)
+                        .with(Position {
+                            x: x as i32,
+                            y: y as i32,
+                        })
+                        .with(Walkable { step_size: 1 })
+                        .with(Health { value: 5 })
+                        .with(Model {
+                            name: "E1-L".to_string(),
+                            serial_number: "XXXXXX-XX".to_string(),
+                        })
+                        .with(turn::InQueue);
+                    //turn_queue.add_zero(commands.current_entity().unwrap());
+                }
+                _ => continue,
+            };
+        }
+        y -= 1;
+    }
+
+    /*commands.spawn(SpriteComponents {
+        material: materials.player.clone(),
+        sprite: Sprite::new(Vec2::new(20.0, 20.0)),
+        ..Default::default()
+    })
+        .with(Player {
+            direction: Direction::Up,
+        })
+        .with(Position { x: 0.0, y: 0.0 })
+        .with(Walkable { step_size: 1.0 });*/
+
+    /*commands.spawn(SpriteComponents {
+        material: materials.wall.clone(),
+        sprite: Sprite::new(Vec2::new(20.0, 20.0)),
+        ..Default::default()
+    })
+        .with(Blocking)
+        .with(Position {x: 0.0, y: 3.0});*/
+}
+
+fn player_movement(
+    //map: Res<Array2<Entity>>,
+    mut commands: Commands,
+    mut turn_queue: ResMut<turn::Queue>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut events: ResMut<Events<turn::Done>>,
+    mut players: Query<(
+        Entity,
+        &mut Player,
+        &Walkable,
+        &mut Position,
+        &mut turn::Head,
+    )>,
+    walls: Query<(Entity, &Blocking, &Position)>,
+) {
+    for (player_entity, mut _player, walkable, mut position, _head) in players.iter_mut() {
+        let mut attempted_to_walk = false;
+        let mut blocked = false;
+        let mut walked = false;
+
+        let step_size = walkable.step_size;
+        let mut position_change = (0, 0);
+
+        if keyboard_input.just_pressed(KeyCode::Up) {
+            position_change = (0, step_size);
+            attempted_to_walk = true;
+        } else if keyboard_input.just_pressed(KeyCode::Right) {
+            position_change = (step_size, 0);
+            attempted_to_walk = true;
+        } else if keyboard_input.just_pressed(KeyCode::Down) {
+            position_change = (0, -step_size);
+            attempted_to_walk = true;
+        } else if keyboard_input.just_pressed(KeyCode::Left) {
+            position_change = (-step_size, 0);
+            attempted_to_walk = true;
+        }
+
+        if attempted_to_walk {
+            for (wall_entity, _blocking, &wall_position) in walls.iter() {
+                if wall_position.eq(&Position {
+                    x: position.x + position_change.0,
+                    y: position.y + position_change.1,
+                }) {
+                    blocked = true;
+                    println!("Is Blocking!")
+                }
+            }
+
+            if !blocked {
+                position.translate(position_change.0, position_change.1);
+                println!("Walked!");
+                if !turn_queue.head_makes_action(100) {
+                    commands.remove_one::<turn::Head>(player_entity);
+                    events.send(turn::Done);
+                }
+            }
+        }
+    }
+}
+
+fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
+    fn convert(p: i32, position_multiplier: i32) -> i32 {
+        p * position_multiplier
+    }
+    let window = windows.get_primary().unwrap();
+    for (pos, mut transform) in q.iter_mut() {
+        transform.translation =
+            Vec3::new(convert(pos.x, 20) as f32, convert(pos.y, 20) as f32, 0.0);
+    }
+}
+
+fn pit_mechanic(
+    mut commands: Commands,
+    pits: Query<(Entity, &Pit, &Position)>,
+    mut walkable_entities: Query<(Entity, &mut Walkable, &Position)>,
+) {
+    for (pit_entity, _pit, pit_positon) in pits.iter() {
+        for (walkable_entity, _walkable, walking_position) in walkable_entities.iter_mut() {
+            if pit_positon.eq(walking_position) {
+                println!("Fell into pit");
+                commands.remove_one::<Walkable>(walkable_entity);
+            }
+        }
+    }
+}
+
+fn get_legs(
+    mut commands: Commands,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut players: Query<(Entity, &Player)>,
+) {
+    for (player_entity, _player) in players.iter_mut() {
+        if keyboard_input.just_pressed(KeyCode::X) {
+            println!("Got legs");
+            commands.insert_one(player_entity, Walkable { step_size: 1 });
+        }
+    }
+}
+
+fn turn_management(
+    mut commands: Commands,
+    mut turn_queue: ResMut<turn::Queue>,
+    mut event_reader: Local<EventReader<turn::Done>>,
+    events: Res<Events<turn::Done>>,
+    entities: Query<(Entity, &turn::InQueue)>,
+) {
+    for event in event_reader.iter(&events) {
+        println!("Next Turn");
+        let head_entity = turn_queue.peek().entity;
+        let mut head = entities.get(head_entity).unwrap().0;
+        commands.insert_one(head, turn::Head);
+    }
+    //println!("Has Turn Added {}", turn_queue.events.len());
+    //turn_queue.print();
+}
+
+fn turn_tick(
+    mut commands: Commands,
+    mut turn_queue: ResMut<turn::Queue>,
+    mut events: ResMut<Events<turn::Done>>,
+    mut turns: Query<(Entity, &turn::Counter, &turn::InQueue, &turn::Head)>,
+) {
+    for (entity, _counter, _in_queue, _head) in turns.iter_mut() {
+        //println!("Turn ticked!");
+        turn_queue.head_makes_action(100);
+        commands.remove_one::<turn::Head>(entity);
+        events.send(turn::Done);
+    }
+}
+
+fn main() {
+    let loaded_config = config::load_config(format!("{}/config.ron", env!("CARGO_MANIFEST_DIR")));
+    //let menu_stage = "menu_stage";
+    let world_stage = "world_stage";
+
+    App::build()
+        .add_resource(ClearColor(Color::rgb(0.01, 0.01, 0.12)))
+        .add_resource(WindowDescriptor {
+            width: loaded_config.window_width(),
+            height: loaded_config.window_height(),
+            title: loaded_config.window_title().to_string(),
+            ..Default::default()
+        })
+        /*.add_resource(Array2::<Entity>(HashMap::new()))*/
+        .add_startup_system(setup.system())
+        .add_startup_stage(world_stage)
+        .add_startup_system_to_stage(world_stage, world_setup.system())
+        .add_event::<turn::Done>()
+        .add_system(player_movement.system())
+        //.add_system(size_scaling.system())
+        .add_system(position_translation.system())
+        .add_system(pit_mechanic.system())
+        .add_system(get_legs.system())
+        .add_system(turn_management.system())
+        .add_system(turn_tick.system())
+        .add_plugins(DefaultPlugins)
+        .run();
+}
