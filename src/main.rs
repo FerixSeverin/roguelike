@@ -92,59 +92,6 @@ struct Model {
     serial_number: String,
 }
 
-/*fn game_setup (
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<ColorMaterial>>
-) {
-    commands
-        .spawn(UiCameraComponents::default())
-        .spawn(NodeComponents {
-            style: Style {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
-                ..Default::default()
-            },
-            material: materials.add(Color::NONE.into()),
-            ..Default::default()
-        })
-        .with_children(|parent| {
-            parent
-                .spawn(TextComponents {
-                    text: Text {
-                        value: "Start".to_string(),
-                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                        style: TextStyle {
-                            font_size: 40.0,
-                            color: Color::WHITE
-                        }
-                    },
-                    ..Default::default()
-                })
-                .spawn(TextComponents {
-                    text: Text {
-                        value: "Exit".to_string(),
-                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                        style: TextStyle {
-                            font_size: 40.0,
-                            color: Color::WHITE
-                        }
-                    },
-                    ..Default::default()
-                });
-        });
-}
-
-fn blue_text(
-    mut text_query: Query<&mut TextComponents>
-) {
-    for mut text_comp in text_query.iter_mut() {
-        text_comp.text.style.color = Color::BLUE;
-    }
-}*/
-
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.spawn((turn::Counter {}, turn::InQueue));
     commands.insert_resource(turn::Queue::new(commands.current_entity().unwrap()));
@@ -242,25 +189,6 @@ fn world_setup(
         }
         y -= 1;
     }
-
-    /*commands.spawn(SpriteComponents {
-        material: materials.player.clone(),
-        sprite: Sprite::new(Vec2::new(20.0, 20.0)),
-        ..Default::default()
-    })
-        .with(Player {
-            direction: Direction::Up,
-        })
-        .with(Position { x: 0.0, y: 0.0 })
-        .with(Walkable { step_size: 1.0 });*/
-
-    /*commands.spawn(SpriteComponents {
-        material: materials.wall.clone(),
-        sprite: Sprite::new(Vec2::new(20.0, 20.0)),
-        ..Default::default()
-    })
-        .with(Blocking)
-        .with(Position {x: 0.0, y: 3.0});*/
 }
 
 fn player_movement(
