@@ -22,17 +22,17 @@ pub struct Event {
 
 pub struct Queue {
     pub events: Vec<Event>,
-    turn_entity: Entity,
+    counter: Entity,
 }
 
 impl Queue {
-    pub fn new(turn_entity: Entity) -> Self {
+    pub fn new(counter: Entity) -> Self {
         Queue {
             events: vec![Event {
                 time: 0,
-                entity: turn_entity,
+                entity: counter,
             }],
-            turn_entity,
+            counter,
         }
     }
 
@@ -49,7 +49,7 @@ impl Queue {
     }
 
     pub fn head_makes_action(&mut self, time: u64) -> bool {
-        let mut still_head: bool;
+        let still_head: bool;
         self.events[0].time += time;
         if self.events[0].time <= self.events[1].time {
             still_head = true;

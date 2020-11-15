@@ -34,7 +34,7 @@ struct Materials {
     evil: Handle<ColorMaterial>,
 }
 
-//Components
+//Work in progress components, will be moved later to separate files
 
 struct Pit;
 
@@ -160,7 +160,6 @@ fn player_movement(
     for (player_entity, mut _player, walkable, mut position, _head) in players.iter_mut() {
         let mut attempted_to_walk = false;
         let mut blocked = false;
-        let mut walked = false;
 
         let step_size = walkable.step_size;
         let mut position_change = (0, 0);
@@ -180,7 +179,7 @@ fn player_movement(
         }
 
         if attempted_to_walk {
-            for (wall_entity, _blocking, &wall_position) in walls.iter() {
+            for (_wall_entity, _blocking, &wall_position) in walls.iter() {
                 if wall_position.eq(&mobility::Position {
                     x: position.x + position_change.0,
                     y: position.y + position_change.1,
@@ -202,11 +201,10 @@ fn player_movement(
     }
 }
 
-fn position_translation(windows: Res<Windows>, mut q: Query<(&mobility::Position, &mut Transform)>) {
+fn position_translation(mut q: Query<(&mobility::Position, &mut Transform)>) {
     fn convert(p: i32, position_multiplier: i32) -> i32 {
         p * position_multiplier
     }
-    let window = windows.get_primary().unwrap();
     for (pos, mut transform) in q.iter_mut() {
         transform.translation =
             Vec3::new(convert(pos.x, 20) as f32, convert(pos.y, 20) as f32, 0.0);
@@ -218,7 +216,7 @@ fn pit_mechanic(
     pits: Query<(Entity, &Pit, &mobility::Position)>,
     mut walkable_entities: Query<(Entity, &mut mobility::Walkable, &mobility::Position)>,
 ) {
-    for (pit_entity, _pit, pit_positon) in pits.iter() {
+    for (_pit_entity, _pit, pit_positon) in pits.iter() {
         for (walkable_entity, _walkable, walking_position) in walkable_entities.iter_mut() {
             if pit_positon.eq(walking_position) {
                 println!("Fell into pit");
@@ -248,14 +246,12 @@ fn turn_management(
     events: Res<Events<turn::Done>>,
     entities: Query<(Entity, &turn::InQueue)>,
 ) {
-    for event in event_reader.iter(&events) {
+    for _event in event_reader.iter(&events) {
         println!("Next Turn");
         let head_entity = turn_queue.peek().entity;
-        let mut head = entities.get(head_entity).unwrap().0;
+        let head = entities.get(head_entity).unwrap().0;
         commands.insert_one(head, turn::Head);
     }
-    //println!("Has Turn Added {}", turn_queue.events.len());
-    //turn_queue.print();
 }
 
 fn turn_tick(
