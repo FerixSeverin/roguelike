@@ -7,6 +7,7 @@ mod item;
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
+use std::borrow::Borrow;
 
 //Events
 
@@ -103,7 +104,8 @@ fn world_setup(
                         .with(character::Attributes::new(20, 5))
                         .with(turn::InQueue)
                         .with(turn::Head)
-                        .with(character::Inventory::starting_inventory(vec![knife_id]));
+                        .with(character::Inventory::starting_inventory(vec![knife_id]))
+                        .with(character::Equipment::naked());
                     turn_queue.add_zero(commands.current_entity().unwrap());
                 }
                 'P' => {
@@ -147,19 +149,19 @@ fn world_setup(
     }
 }
 
-// fn attack(
-//     mut commands: Commands,
-//     keyboard_input: Res<Input<KeyCode>>,
-//     mut events: ResMut<Events<turn::Done>>,
-//     mut players: Query<(
-//         Entity,
-//         &mut character::Player,
-//         &mut mobility::Position,
-//         &mut turn::Head,
-//     )>,
-// ) {
-//
-// }
+fn attack(
+    mut commands: Commands,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut events: ResMut<Events<turn::Done>>,
+    mut players: Query<(
+        Entity,
+        &mut character::Player,
+        &mut mobility::Position,
+        &mut turn::Head,
+    )>,
+) {
+
+}
 
 fn player_movement(
     //map: Res<Array2<Entity>>,
@@ -289,12 +291,30 @@ fn turn_tick(
 
 fn inventory_management(
     keyboard_input: Res<Input<KeyCode>>,
-    players_with_inventory: Query<(Entity, &character::Player, &character::Inventory)>,
+    mut players: Query<(Entity, &character::Player, &mut character::Inventory, &mut character::Equipment)>,
     items: Query<(&item::Item)>,
 ) {
-    for (_entity, _player, _inventory) in players_with_inventory.iter() {
-        if keyboard_input.just_pressed(KeyCode::I) {
+    if keyboard_input.just_pressed(KeyCode::I) {
+        for (_entity, _player, _inventory, _equipment) in players.iter_mut() {
             _inventory.look(&items);
+        }
+    }
+
+    if keyboard_input.just_pressed(KeyCode::K) {
+        for (_entity, _player, mut _inventory, mut _equipment) in players.iter_mut() {
+            _inventory.equip(&mut _equipment.weapon, 0);
+        }
+    }
+}
+
+fn equipment_management(
+    keyboard_input: Res<Input<KeyCode>>,
+    players_with_equipment: Query<(Entity, &character::Player, &character::Equipment)>,
+    items: Query<(&item::Item)>,
+) {
+    for (_entity, _player, _equipment) in players_with_equipment.iter() {
+        if keyboard_input.just_pressed(KeyCode::O) {
+            _equipment.look(&items);
         }
     }
 }
@@ -323,6 +343,7 @@ fn main() {
         .add_system(turn_management.system())
         .add_system(turn_tick.system())
         .add_system(inventory_management.system())
+        .add_system(equipment_management.system())
         .add_plugins(DefaultPlugins)
         .run();
 }

@@ -6,6 +6,51 @@ pub struct Player;
 
 pub struct Evil;
 
+pub struct Slot {
+    entity: Option<Entity>
+}
+
+impl Slot {
+    pub fn nothing() -> Self {
+        Slot {
+            entity: None,
+        }
+    }
+
+    pub fn equip(&mut self, entity: Entity) {
+        self.entity = Option::from(entity);
+    }
+}
+
+pub struct Equipment {
+    pub weapon: Slot,
+    pub armor: Slot,
+}
+
+impl Equipment {
+    pub fn naked() -> Self {
+        Equipment {
+            weapon: Slot::nothing(),
+            armor: Slot::nothing(),
+        }
+    }
+
+    pub fn look(&self, item_components: &Query<&item::Item>) {
+        if self.armor.entity.is_some() {
+            println!("Armor: {}", item_components.get(self.armor.entity.unwrap()).unwrap().name);
+        }
+        else {
+            println!("Armor: None");
+        }
+
+        if self.weapon.entity.is_some() {
+            println!("Weapon: {}", item_components.get(self.weapon.entity.unwrap()).unwrap().name);
+        } else {
+            println!("Weapon: None");
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Inventory {
     pub items: Vec<Entity>
@@ -34,6 +79,10 @@ impl Inventory {
         for item in &self.items {
             println!("{}", item_components.get(*item).unwrap().name);
         }
+    }
+
+    pub fn equip(&mut self, equipment_slot: &mut Slot, inventory_position: usize) {
+        equipment_slot.equip(self.items[inventory_position]);
     }
 }
 
