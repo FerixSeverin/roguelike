@@ -3,6 +3,7 @@ mod turn;
 mod world;
 mod mobility;
 mod character;
+mod item;
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
@@ -63,6 +64,9 @@ fn world_setup(
     mut turn_queue: ResMut<turn::Queue>,
     materials: Res<Materials>,
 ) {
+    commands.spawn((item::Item::new("Knife", "Desc"), item::Melee::new(5)));
+    let knife_id: Entity = commands.current_entity().unwrap();
+
     let w: world::World = world::load_world(format!("{}/world.ron", env!("CARGO_MANIFEST_DIR")));
     let mut y: isize = (w.get().len() - 1) as isize;
     for row in w.get() {
@@ -96,9 +100,10 @@ fn world_setup(
                             y: y as i32,
                         })
                         .with(mobility::Walkable { step_size: 1 })
-                        .with(character::Attributes::new(20))
+                        .with(character::Attributes::new(20, 5))
                         .with(turn::InQueue)
-                        .with(turn::Head);
+                        .with(turn::Head)
+                        .with(character::Inventory::starting_inventory(vec![knife_id]));
                     turn_queue.add_zero(commands.current_entity().unwrap());
                 }
                 'P' => {
@@ -127,7 +132,7 @@ fn world_setup(
                             y: y as i32,
                         })
                         .with(mobility::Walkable { step_size: 1 })
-                        .with(character::Attributes::new(5))
+                        .with(character::Attributes::new(5, 0))
                         .with(Model {
                             name: "E1-L".to_string(),
                             serial_number: "XXXXXX-XX".to_string(),
@@ -141,6 +146,20 @@ fn world_setup(
         y -= 1;
     }
 }
+
+// fn attack(
+//     mut commands: Commands,
+//     keyboard_input: Res<Input<KeyCode>>,
+//     mut events: ResMut<Events<turn::Done>>,
+//     mut players: Query<(
+//         Entity,
+//         &mut character::Player,
+//         &mut mobility::Position,
+//         &mut turn::Head,
+//     )>,
+// ) {
+//
+// }
 
 fn player_movement(
     //map: Res<Array2<Entity>>,
@@ -268,9 +287,20 @@ fn turn_tick(
     }
 }
 
+fn inventory_management(
+    keyboard_input: Res<Input<KeyCode>>,
+    players_with_inventory: Query<(Entity, &character::Player, &character::Inventory)>,
+    items: Query<(&item::Item)>,
+) {
+    for (_entity, _player, _inventory) in players_with_inventory.iter() {
+        if keyboard_input.just_pressed(KeyCode::I) {
+            _inventory.look(&items);
+        }
+    }
+}
+
 fn main() {
     let loaded_config = config::load_config(format!("{}/config.ron", env!("CARGO_MANIFEST_DIR")));
-    //let menu_stage = "menu_stage";
     let world_stage = "world_stage";
 
     App::build()
@@ -287,12 +317,12 @@ fn main() {
         .add_startup_system_to_stage(world_stage, world_setup.system())
         .add_event::<turn::Done>()
         .add_system(player_movement.system())
-        //.add_system(size_scaling.system())
         .add_system(position_translation.system())
         .add_system(pit_mechanic.system())
         .add_system(get_legs.system())
         .add_system(turn_management.system())
         .add_system(turn_tick.system())
+        .add_system(inventory_management.system())
         .add_plugins(DefaultPlugins)
         .run();
 }
