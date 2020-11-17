@@ -3,13 +3,15 @@
 pub struct Item {
     pub name: String,
     pub description: String,
+    pub weight: u32,
 }
 
 impl Item {
-    pub fn new(name: &str, description: &str) -> Self {
+    pub fn new(name: &str, description: &str, weight: u32) -> Self {
         Item {
             name: name.to_string(),
-            description: description.to_string()
+            description: description.to_string(),
+            weight,
         }
     }
 }
@@ -29,3 +31,7 @@ impl Melee {
 pub struct Damage {
     pub base: i32
 }
+
+pub struct Consumable;
+
+pub struct Equippable;

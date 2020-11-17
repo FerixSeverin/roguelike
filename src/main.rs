@@ -65,8 +65,11 @@ fn world_setup(
     mut turn_queue: ResMut<turn::Queue>,
     materials: Res<Materials>,
 ) {
-    commands.spawn((item::Item::new("Knife", "Desc"), item::Melee::new(5)));
+    commands.spawn((item::Item::new("Knife", "Desc", 15), item::Melee::new(5), item::Equippable));
     let knife_id: Entity = commands.current_entity().unwrap();
+
+    commands.spawn((item::Item::new("Health Potion", "Desc", 5), item::Consumable));
+    let potion_id: Entity = commands.current_entity().unwrap();
 
     let w: world::World = world::load_world(format!("{}/world.ron", env!("CARGO_MANIFEST_DIR")));
     let mut y: isize = (w.get().len() - 1) as isize;
@@ -104,7 +107,7 @@ fn world_setup(
                         .with(character::Attributes::new(20, 5))
                         .with(turn::InQueue)
                         .with(turn::Head)
-                        .with(character::Inventory::starting_inventory(vec![knife_id]))
+                        .with(character::Inventory::starting_inventory(vec![knife_id, potion_id]))
                         .with(character::Equipment::naked());
                     turn_queue.add_zero(commands.current_entity().unwrap());
                 }
@@ -149,7 +152,7 @@ fn world_setup(
     }
 }
 
-fn attack(
+fn player_attack(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
     mut events: ResMut<Events<turn::Done>>,
@@ -310,11 +313,11 @@ fn inventory_management(
 fn equipment_management(
     keyboard_input: Res<Input<KeyCode>>,
     players_with_equipment: Query<(Entity, &character::Player, &character::Equipment)>,
-    items: Query<(&item::Item)>,
+    equippable_items: Query<(&item::Item, &item::Equippable)>,
 ) {
     for (_entity, _player, _equipment) in players_with_equipment.iter() {
         if keyboard_input.just_pressed(KeyCode::O) {
-            _equipment.look(&items);
+            _equipment.look(&equippable_items);
         }
     }
 }

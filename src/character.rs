@@ -35,16 +35,16 @@ impl Equipment {
         }
     }
 
-    pub fn look(&self, item_components: &Query<&item::Item>) {
+    pub fn look(&self, item_components: &Query<(&item::Item, &item::Equippable)>) {
         if self.armor.entity.is_some() {
-            println!("Armor: {}", item_components.get(self.armor.entity.unwrap()).unwrap().name);
+            println!("Armor: {}", item_components.get_component::<item::Item>(self.armor.entity.unwrap()).unwrap().name);
         }
         else {
             println!("Armor: None");
         }
 
         if self.weapon.entity.is_some() {
-            println!("Weapon: {}", item_components.get(self.weapon.entity.unwrap()).unwrap().name);
+            println!("Weapon: {}", item_components.get_component::<item::Item>(self.weapon.entity.unwrap()).unwrap().name);
         } else {
             println!("Weapon: None");
         }
@@ -53,7 +53,9 @@ impl Equipment {
 
 #[derive(Default)]
 pub struct Inventory {
-    pub items: Vec<Entity>
+    pub items: Vec<Entity>,
+    pub max_weight: u32,
+    pub current_weight: u32,
 }
 
 impl Inventory {
@@ -63,7 +65,9 @@ impl Inventory {
 
     pub fn starting_inventory(items: Vec<Entity>) -> Self {
         Inventory {
-            items
+            items,
+            max_weight: 400,
+            current_weight: 0,
         }
     }
 
@@ -77,7 +81,7 @@ impl Inventory {
 
     pub fn look(&self, item_components: &Query<(&item::Item)>) {
         for item in &self.items {
-            println!("{}", item_components.get(*item).unwrap().name);
+            println!("[{}]", item_components.get(*item).unwrap().name);
         }
     }
 
@@ -92,14 +96,14 @@ pub struct Attribute {
 
 pub struct Attributes {
     pub health: Attribute,
-    pub armor: Attribute,
+    pub defence: Attribute,
 }
 
 impl Attributes {
-    pub fn new(health_base: i32, armor_base: i32) -> Self {
+    pub fn new(health_base: i32, defence_base: i32) -> Self {
         Attributes {
             health: Attribute { base: health_base },
-            armor: Attribute { base: armor_base }
+            defence: Attribute { base: defence_base }
         }
     }
 }
