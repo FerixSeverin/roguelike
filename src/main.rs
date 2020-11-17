@@ -65,7 +65,7 @@ fn world_setup(
     mut turn_queue: ResMut<turn::Queue>,
     materials: Res<Materials>,
 ) {
-    commands.spawn((item::Item::new("Knife", "Desc", 15), item::Melee::new(5), item::Equippable));
+    commands.spawn((item::Item::new("Knife", "Desc", 15), item::Melee::new(5), item::Equippable, item::Damage { base: 5 }));
     let knife_id: Entity = commands.current_entity().unwrap();
 
     commands.spawn((item::Item::new("Health Potion", "Desc", 5), item::Consumable));
@@ -156,14 +156,55 @@ fn player_attack(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
     mut events: ResMut<Events<turn::Done>>,
+    mut turn_queue: ResMut<turn::Queue>,
     mut players: Query<(
         Entity,
         &mut character::Player,
         &mut mobility::Position,
         &mut turn::Head,
+        &character::Equipment,
+    )>,
+    mut targets: Query<(
+        Entity,
+        &character::Evil,
+        &mut character::Attributes,
+        &mobility::Position,
+    )>,
+    weapons: Query<(
+        &item::Item,
+        &item::Equippable,
+        &item::Damage,
     )>,
 ) {
+    let mut attempted_to_attack = false;
+    let mut attack_direction = (0, 0);
+    if keyboard_input.just_pressed(KeyCode::W) {
+        attack_direction = (0, 1);
+        attempted_to_attack = true;
+    } else if keyboard_input.just_pressed(KeyCode::D) {
+        attack_direction = (1, 0);
+        attempted_to_attack = true;
+    } else if keyboard_input.just_pressed(KeyCode::S) {
+        attack_direction = (0, -1);
+        attempted_to_attack = true;
+    } else if keyboard_input.just_pressed(KeyCode::A) {
+        attack_direction = (-1, 0);
+        attempted_to_attack = true;
+    }
 
+    if attempted_to_attack {
+        for (entity, _player, player_position, _head, _equipment) in players.iter_mut() {
+            let mut attack_position = mobility::Position { x: player_position.x + attack_direction.0, y: player_position.y + attack_direction.1 };
+            for (_entity, _evil, mut attributes, target_position) in targets.iter_mut() {
+                if target_position.eq(&attack_position) {
+                    attributes.health.modifier -= _equipment.get_weapon_damage(&weapons);
+                    println!("Attacked! Targets current health is: {}", attributes.health.current());
+                    turn_queue.head_makes_action(100);
+                    events.send(turn::Done);
+                }
+            }
+        }
+    }
 }
 
 fn player_movement(
@@ -322,6 +363,18 @@ fn equipment_management(
     }
 }
 
+fn death(
+    mut commands: Commands,
+    mut entities: Query<(Entity, &mut character::Attributes)>,
+) {
+    for (entity, attributes) in entities.iter_mut() {
+        if attributes.health.current() <= 0 {
+            println!("Entity died!");
+            commands.despawn(entity);
+        }
+    }
+}
+
 fn main() {
     let loaded_config = config::load_config(format!("{}/config.ron", env!("CARGO_MANIFEST_DIR")));
     let world_stage = "world_stage";
@@ -347,6 +400,8 @@ fn main() {
         .add_system(turn_tick.system())
         .add_system(inventory_management.system())
         .add_system(equipment_management.system())
+        .add_system(player_attack.system())
+        .add_system(death.system())
         .add_plugins(DefaultPlugins)
         .run();
 }

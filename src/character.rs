@@ -49,6 +49,15 @@ impl Equipment {
             println!("Weapon: None");
         }
     }
+
+    pub fn get_weapon_damage(&self, weapons: &Query<(&item::Item, &item::Equippable, &item::Damage)>) -> i32 {
+        if self.weapon.entity.is_some() {
+            weapons.get_component::<item::Damage>(self.weapon.entity.unwrap()).unwrap().base
+        } else {
+            println!("No Weapon is equipped!");
+            0
+        }
+    }
 }
 
 #[derive(Default)]
@@ -91,7 +100,14 @@ impl Inventory {
 }
 
 pub struct Attribute {
-    base: i32
+    pub base: i32,
+    pub modifier: i32,
+}
+
+impl Attribute {
+    pub fn current(&self) -> i32 {
+        self.base + self.modifier
+    }
 }
 
 pub struct Attributes {
@@ -102,8 +118,8 @@ pub struct Attributes {
 impl Attributes {
     pub fn new(health_base: i32, defence_base: i32) -> Self {
         Attributes {
-            health: Attribute { base: health_base },
-            defence: Attribute { base: defence_base }
+            health: Attribute { base: health_base, modifier: 0 },
+            defence: Attribute { base: defence_base, modifier: 0 }
         }
     }
 }
