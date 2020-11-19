@@ -1,3 +1,11 @@
+// Globals
+
+#[derive(PartialEq)]
+pub enum EqiuppedInto {
+    Weapon,
+    Armor,
+}
+
 // Components
 
 pub struct Item {
@@ -34,4 +42,14 @@ pub struct Damage {
 
 pub struct Consumable;
 
-pub struct Equippable;
+pub struct Equippable {
+    pub equipped_into: EqiuppedInto,
+}
+
+impl Equippable {
+    pub fn new(equipped_into: EqiuppedInto) -> Self {
+        Equippable {
+            equipped_into,
+        }
+    }
+}

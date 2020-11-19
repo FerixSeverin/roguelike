@@ -7,18 +7,27 @@ pub struct Player;
 pub struct Evil;
 
 pub struct Slot {
-    entity: Option<Entity>
+    entity: Option<Entity>,
+    equipped_into: item::EqiuppedInto,
 }
 
 impl Slot {
-    pub fn nothing() -> Self {
+    pub fn nothing(equipped_into: item::EqiuppedInto) -> Self {
         Slot {
             entity: None,
+            equipped_into,
         }
     }
 
-    pub fn equip(&mut self, entity: Entity) {
-        self.entity = Option::from(entity);
+    pub fn equip(&mut self, entity: Entity, equipped_into: &item::EqiuppedInto) -> bool {
+        if self.equipped_into.eq(equipped_into) {
+            self.entity = Option::from(entity);
+            true
+        } else {
+            println!("Item does not fit the slot!");
+            false
+        }
+
     }
 }
 
@@ -30,8 +39,8 @@ pub struct Equipment {
 impl Equipment {
     pub fn naked() -> Self {
         Equipment {
-            weapon: Slot::nothing(),
-            armor: Slot::nothing(),
+            weapon: Slot::nothing(item::EqiuppedInto::Weapon),
+            armor: Slot::nothing(item::EqiuppedInto::Armor),
         }
     }
 
@@ -94,8 +103,10 @@ impl Inventory {
         }
     }
 
-    pub fn equip(&mut self, equipment_slot: &mut Slot, inventory_position: usize) {
-        equipment_slot.equip(self.items[inventory_position]);
+    pub fn equip(&mut self, equipment_slot: &mut Slot, inventory_position: usize, equippable_items: &Query<(&item::Item, &item::Equippable)>) {
+        let equipment: Entity = self.items[inventory_position];
+        let equipped_into: &item::EqiuppedInto = &equippable_items.get(equipment).unwrap().1.equipped_into;
+        equipment_slot.equip(equipment, equipped_into);
     }
 }
 

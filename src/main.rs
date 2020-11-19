@@ -65,7 +65,7 @@ fn world_setup(
     mut turn_queue: ResMut<turn::Queue>,
     materials: Res<Materials>,
 ) {
-    commands.spawn((item::Item::new("Knife", "Desc", 15), item::Melee::new(5), item::Equippable, item::Damage { base: 5 }));
+    commands.spawn((item::Item::new("Knife", "Desc", 15), item::Melee::new(5), item::Equippable::new(item::EqiuppedInto::Weapon), item::Damage { base: 5 }));
     let knife_id: Entity = commands.current_entity().unwrap();
 
     commands.spawn((item::Item::new("Health Potion", "Desc", 5), item::Consumable));
@@ -337,6 +337,7 @@ fn inventory_management(
     keyboard_input: Res<Input<KeyCode>>,
     mut players: Query<(Entity, &character::Player, &mut character::Inventory, &mut character::Equipment)>,
     items: Query<(&item::Item)>,
+    equippable_items: Query<(&item::Item, &item::Equippable)>,
 ) {
     if keyboard_input.just_pressed(KeyCode::I) {
         for (_entity, _player, _inventory, _equipment) in players.iter_mut() {
@@ -346,7 +347,7 @@ fn inventory_management(
 
     if keyboard_input.just_pressed(KeyCode::K) {
         for (_entity, _player, mut _inventory, mut _equipment) in players.iter_mut() {
-            _inventory.equip(&mut _equipment.weapon, 0);
+            _inventory.equip(&mut _equipment.weapon, 0, &equippable_items);
         }
     }
 }
