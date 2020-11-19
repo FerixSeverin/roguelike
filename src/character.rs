@@ -98,15 +98,32 @@ impl Inventory {
     }
 
     pub fn look(&self, item_components: &Query<(&item::Item)>) {
+        if self.items.is_empty() {
+            println!("Inventory is empty");
+            return;
+        }
+
         for item in &self.items {
             println!("[{}]", item_components.get(*item).unwrap().name);
         }
     }
 
     pub fn equip(&mut self, equipment_slot: &mut Slot, inventory_position: usize, equippable_items: &Query<(&item::Item, &item::Equippable)>) {
+        if self.items.is_empty() {
+            println!("Inventory is empty");
+            return;
+        }
+
         let equipment: Entity = self.items[inventory_position];
-        let equipped_into: &item::EqiuppedInto = &equippable_items.get(equipment).unwrap().1.equipped_into;
-        equipment_slot.equip(equipment, equipped_into);
+        if equippable_items.get(equipment).is_ok() {
+            let equipped_into: &item::EqiuppedInto = &equippable_items.get(equipment).unwrap().1.equipped_into;
+            if equipment_slot.equip(equipment, equipped_into) {
+                self.items.remove(inventory_position);
+            }
+        } else {
+            println!("Selected item can not be equipped");
+        }
+
     }
 }
 
