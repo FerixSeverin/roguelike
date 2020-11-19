@@ -7,11 +7,63 @@ mod item;
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
-use std::borrow::Borrow;
+use std::collections::HashMap;
 
 //Events
 
 //Globals
+
+struct Tile {
+    pub main: Option<Entity>,
+    pub temperature: i16,
+    pub air: Option<Entity>,
+    pub ground: Option<Entity>,
+    pub base: Option<Entity>,
+}
+
+type World<T> = HashMap<(i32, i32), T>;
+
+impl Tile {
+    pub fn new (main: Entity, temperature: i16, air: Entity, ground: Entity, base: Entity) -> Self {
+        Self {
+            main: Option::from(main),
+            temperature,
+            air: Option::from(air),
+            ground: Option::from(ground),
+            base: Option::from(base),
+        }
+    }
+
+    pub fn main (entity: Entity) -> Self {
+        Self {
+            main: Option::from(entity),
+            temperature: 0,
+            air: None,
+            ground: None,
+            base: None,
+        }
+    }
+
+    pub fn base (entity: Entity) -> Self {
+        Self {
+            main: None,
+            temperature: 0,
+            air: None,
+            ground: None,
+            base: Option::from(entity),
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            main: None,
+            temperature: 0,
+            air: None,
+            ground: None,
+            base: None,
+        }
+    }
+}
 
 struct Size {
     width: f32,
@@ -50,6 +102,7 @@ struct Model {
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.spawn((turn::Counter {}, turn::InQueue));
     commands.insert_resource(turn::Queue::new(commands.current_entity().unwrap()));
+    commands.insert_resource(World::<Tile>::new());
 
     commands.spawn(Camera2dComponents::default());
     commands.insert_resource(Materials {
@@ -63,6 +116,7 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
 fn world_setup(
     mut commands: Commands,
     mut turn_queue: ResMut<turn::Queue>,
+    mut world: ResMut<World<Tile>>,
     materials: Res<Materials>,
 ) {
     commands.spawn((item::Item::new("Knife", "Desc", 15), item::Melee::new(5), item::Equippable::new(item::EqiuppedInto::Weapon), item::Damage { base: 5 }));
@@ -77,7 +131,9 @@ fn world_setup(
         for (x, tile) in row.chars().enumerate() {
             //let mut sprite_component: SpriteComponents;
             match tile {
-                '.' => continue,
+                '.' => {
+                    world.insert((x as i32, y as i32), Tile::empty());
+                }
                 '#' => {
                     commands
                         .spawn(SpriteComponents {
@@ -90,6 +146,7 @@ fn world_setup(
                             x: x as i32,
                             y: y as i32,
                         });
+                    world.insert((x as i32, y as i32), Tile::main(commands.current_entity().unwrap()));
                 }
                 '@' => {
                     commands
@@ -110,6 +167,7 @@ fn world_setup(
                         .with(character::Inventory::starting_inventory(vec![knife_id, potion_id]))
                         .with(character::Equipment::naked());
                     turn_queue.add_zero(commands.current_entity().unwrap());
+                    world.insert((x as i32, y as i32), Tile::main(commands.current_entity().unwrap()));
                 }
                 'P' => {
                     commands
@@ -123,6 +181,7 @@ fn world_setup(
                             x: x as i32,
                             y: y as i32,
                         });
+                    world.insert((x as i32, y as i32), Tile::base(commands.current_entity().unwrap()));
                 }
                 'E' => {
                     commands
@@ -144,6 +203,7 @@ fn world_setup(
                         })
                         .with(turn::InQueue);
                     //turn_queue.add_zero(commands.current_entity().unwrap());
+                    world.insert((x as i32, y as i32), Tile::main(commands.current_entity().unwrap()));
                 }
                 _ => continue,
             };
@@ -153,7 +213,6 @@ fn world_setup(
 }
 
 fn player_attack(
-    mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
     mut events: ResMut<Events<turn::Done>>,
     mut turn_queue: ResMut<turn::Queue>,
@@ -193,8 +252,8 @@ fn player_attack(
     }
 
     if attempted_to_attack {
-        for (entity, _player, player_position, _head, _equipment) in players.iter_mut() {
-            let mut attack_position = mobility::Position { x: player_position.x + attack_direction.0, y: player_position.y + attack_direction.1 };
+        for (_entity, _player, player_position, _head, _equipment) in players.iter_mut() {
+            let attack_position = mobility::Position { x: player_position.x + attack_direction.0, y: player_position.y + attack_direction.1 };
             for (_entity, _evil, mut attributes, target_position) in targets.iter_mut() {
                 if target_position.eq(&attack_position) {
                     attributes.health.modifier -= _equipment.get_weapon_damage(&weapons);
@@ -211,6 +270,7 @@ fn player_movement(
     //map: Res<Array2<Entity>>,
     mut commands: Commands,
     mut turn_queue: ResMut<turn::Queue>,
+    mut world: ResMut<World<Tile>>,
     keyboard_input: Res<Input<KeyCode>>,
     mut events: ResMut<Events<turn::Done>>,
     mut players: Query<(
@@ -244,14 +304,14 @@ fn player_movement(
         }
 
         if attempted_to_walk {
-            for (_wall_entity, _blocking, &wall_position) in walls.iter() {
-                if wall_position.eq(&mobility::Position {
-                    x: position.x + position_change.0,
-                    y: position.y + position_change.1,
-                }) {
-                    blocked = true;
-                    println!("Is Blocking!")
-                }
+            match world.get(&(position.x + position_change.0, position.y + position_change.1)) {
+                Some(tile) => match tile.main {
+                    Some(_main_entity) => {
+                        blocked = true;
+                    },
+                    None => ()
+                },
+                None => ()
             }
 
             if !blocked {
@@ -336,7 +396,7 @@ fn turn_tick(
 fn inventory_management(
     keyboard_input: Res<Input<KeyCode>>,
     mut players: Query<(Entity, &character::Player, &mut character::Inventory, &mut character::Equipment)>,
-    items: Query<(&item::Item)>,
+    items: Query<&item::Item>,
     equippable_items: Query<(&item::Item, &item::Equippable)>,
 ) {
     if keyboard_input.just_pressed(KeyCode::I) {

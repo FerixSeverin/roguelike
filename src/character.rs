@@ -1,5 +1,5 @@
 use crate::item;
-use bevy::prelude::{Entity, Commands};
+use bevy::prelude::{Entity};
 use bevy::ecs::Query;
 
 pub struct Player;
@@ -97,7 +97,7 @@ impl Inventory {
         self.items.remove(index);
     }
 
-    pub fn look(&self, item_components: &Query<(&item::Item)>) {
+    pub fn look(&self, item_components: &Query<&item::Item>) {
         if self.items.is_empty() {
             println!("Inventory is empty");
             return;
