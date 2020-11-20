@@ -7,86 +7,10 @@ mod item;
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
-use std::collections::HashMap;
 
 //Events
 
 //Globals
-
-struct Tile {
-    pub main: Option<Entity>,
-    pub temperature: i16,
-    pub air: Option<Entity>,
-    pub ground: Option<Entity>,
-    pub base: Option<Entity>,
-}
-
-struct World {
-    pub world: HashMap<(i32, i32), Tile>,
-}
-
-impl World {
-    pub fn new() -> Self {
-        Self {
-            world: HashMap::<(i32, i32), Tile>::new()
-        }
-    }
-
-    pub fn move_main(&mut self, first_position: &(i32, i32), second_position: &(i32, i32)) {
-        if self.world.contains_key(&first_position) && self.world.contains_key(&second_position) {
-            self.world.get_mut(&second_position).unwrap().main = Option::from(self.world.get_mut(&first_position).unwrap().main);
-            self.world.get_mut(&first_position).unwrap().clear_main();
-        } else {
-            println!("Keys do not exist");
-        }
-    }
-}
-
-impl Tile {
-    pub fn new (main: Entity, temperature: i16, air: Entity, ground: Entity, base: Entity) -> Self {
-        Self {
-            main: Option::from(main),
-            temperature,
-            air: Option::from(air),
-            ground: Option::from(ground),
-            base: Option::from(base),
-        }
-    }
-
-    pub fn main (entity: Entity) -> Self {
-        Self {
-            main: Option::from(entity),
-            temperature: 0,
-            air: None,
-            ground: None,
-            base: None,
-        }
-    }
-
-    pub fn clear_main(&mut self) {
-        self.main = None;
-    }
-
-    pub fn base (entity: Entity) -> Self {
-        Self {
-            main: None,
-            temperature: 0,
-            air: None,
-            ground: None,
-            base: Option::from(entity),
-        }
-    }
-
-    pub fn empty() -> Self {
-        Self {
-            main: None,
-            temperature: 0,
-            air: None,
-            ground: None,
-            base: None,
-        }
-    }
-}
 
 struct Size {
     width: f32,
@@ -125,7 +49,7 @@ struct Model {
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.spawn((turn::Counter {}, turn::InQueue));
     commands.insert_resource(turn::Queue::new(commands.current_entity().unwrap()));
-    commands.insert_resource(World::new());
+    commands.insert_resource(world::World::new());
 
     commands.spawn(Camera2dComponents::default());
     commands.insert_resource(Materials {
@@ -139,7 +63,7 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
 fn world_setup(
     mut commands: Commands,
     mut turn_queue: ResMut<turn::Queue>,
-    mut world: ResMut<World>,
+    mut world: ResMut<world::World>,
     materials: Res<Materials>,
 ) {
     commands.spawn((item::Item::new("Knife", "Desc", 15), item::Melee::new(5), item::Equippable::new(item::EqiuppedInto::Weapon), item::Damage { base: 5 }));
@@ -148,14 +72,14 @@ fn world_setup(
     commands.spawn((item::Item::new("Health Potion", "Desc", 5), item::Consumable));
     let potion_id: Entity = commands.current_entity().unwrap();
 
-    let w: world::World = world::load_world(format!("{}/world.ron", env!("CARGO_MANIFEST_DIR")));
+    let w: world::WorldFile = world::load(format!("{}/world.ron", env!("CARGO_MANIFEST_DIR")));
     let mut y: isize = (w.get().len() - 1) as isize;
     for row in w.get() {
         for (x, tile) in row.chars().enumerate() {
             //let mut sprite_component: SpriteComponents;
             match tile {
                 '.' => {
-                    world.world.insert((x as i32, y as i32), Tile::empty());
+                    world.grid.insert((x as i32, y as i32), world::Tile::empty());
                 }
                 '#' => {
                     commands
@@ -169,7 +93,7 @@ fn world_setup(
                             x: x as i32,
                             y: y as i32,
                         });
-                    world.world.insert((x as i32, y as i32), Tile::main(commands.current_entity().unwrap()));
+                    world.grid.insert((x as i32, y as i32), world::Tile::main(commands.current_entity().unwrap()));
                 }
                 '@' => {
                     commands
@@ -190,7 +114,7 @@ fn world_setup(
                         .with(character::Inventory::starting_inventory(vec![knife_id, potion_id]))
                         .with(character::Equipment::naked());
                     turn_queue.add_zero(commands.current_entity().unwrap());
-                    world.world.insert((x as i32, y as i32), Tile::main(commands.current_entity().unwrap()));
+                    world.grid.insert((x as i32, y as i32), world::Tile::main(commands.current_entity().unwrap()));
                 }
                 'P' => {
                     commands
@@ -204,7 +128,7 @@ fn world_setup(
                             x: x as i32,
                             y: y as i32,
                         });
-                    world.world.insert((x as i32, y as i32), Tile::base(commands.current_entity().unwrap()));
+                    world.grid.insert((x as i32, y as i32), world::Tile::base(commands.current_entity().unwrap()));
                 }
                 'E' => {
                     commands
@@ -226,7 +150,7 @@ fn world_setup(
                         })
                         .with(turn::InQueue);
                     //turn_queue.add_zero(commands.current_entity().unwrap());
-                    world.world.insert((x as i32, y as i32), Tile::main(commands.current_entity().unwrap()));
+                    world.grid.insert((x as i32, y as i32), world::Tile::main(commands.current_entity().unwrap()));
                 }
                 _ => continue,
             };
@@ -290,10 +214,9 @@ fn player_attack(
 }
 
 fn player_movement(
-    //map: Res<Array2<Entity>>,
     mut commands: Commands,
     mut turn_queue: ResMut<turn::Queue>,
-    mut world: ResMut<World>,
+    mut world: ResMut<world::World>,
     keyboard_input: Res<Input<KeyCode>>,
     mut events: ResMut<Events<turn::Done>>,
     mut players: Query<(
@@ -327,7 +250,7 @@ fn player_movement(
         }
 
         if attempted_to_walk {
-            match world.world.get(&(position.x + position_change.0, position.y + position_change.1)) {
+            match world.grid.get(&(position.x + position_change.0, position.y + position_change.1)) {
                 Some(tile) => match tile.main {
                     Some(_main_entity) => {
                         blocked = true;
@@ -453,13 +376,13 @@ fn equipment_management(
 
 fn death(
     mut commands: Commands,
-    mut world: ResMut<World>,
+    mut world: ResMut<world::World>,
     mut entities: Query<(Entity, &mut character::Attributes, &mobility::Position)>,
 ) {
     for (entity, attributes, position) in entities.iter_mut() {
         if attributes.health.current() <= 0 {
             println!("Entity died!");
-            match world.world.get_mut(&position.tuple()) {
+            match world.grid.get_mut(&position.tuple()) {
                 Some(tile) => {
                     tile.clear_main();
                 }
