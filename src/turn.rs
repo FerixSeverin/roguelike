@@ -71,4 +71,14 @@ impl Queue {
             println! {"{}, {}", event.entity.id().to_string(), event.time.to_string()};
         }
     }
+
+    pub fn remove_head(&mut self) {
+        self.events.remove(0);
+    }
+
+    pub fn check_turn_order(&self) {
+        for event in self.events.iter() {
+            println!("{}, Time: {}", event.entity.id(), event.time);
+        }
+    }
 }

@@ -7,24 +7,9 @@ mod item;
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
+use bevy::input::keyboard::KeyboardInput;
 
 //Events
-
-//Globals
-
-struct Size {
-    width: f32,
-    height: f32,
-}
-
-impl Size {
-    pub fn square(x: f32) -> Self {
-        Self {
-            width: x,
-            height: x,
-        }
-    }
-}
 
 //Materials
 
@@ -47,8 +32,8 @@ struct Model {
 // Systems
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
-    commands.spawn((turn::Counter {}, turn::InQueue));
-    commands.insert_resource(turn::Queue::new(commands.current_entity().unwrap()));
+    commands.spawn((turn::Counter {}, turn::InQueue, turn::Head));
+    commands.insert_resource(turn::Queue::new(commands.current_entity().unwrap().clone()));
     commands.insert_resource(world::World::new());
 
     commands.spawn(Camera2dComponents::default());
@@ -108,7 +93,6 @@ fn world_setup(
                         .with(mobility::Walkable { step_size: 1 })
                         .with(character::Attributes::new(20, 5))
                         .with(turn::InQueue)
-                        .with(turn::Head)
                         .with(character::Inventory::starting_inventory(vec![knife_id, potion_id]))
                         .with(character::Equipment::naked());
                     turn_queue.add_zero(commands.current_entity().unwrap());
@@ -139,13 +123,13 @@ fn world_setup(
                             point: (x as i32, y as i32)
                         })
                         .with(mobility::Walkable { step_size: 1 })
-                        .with(character::Attributes::new(5, 0))
+                        .with(character::Attributes::new(10, 0))
                         .with(Model {
                             name: "E1-L".to_string(),
                             serial_number: "XXXXXX-XX".to_string(),
                         })
                         .with(turn::InQueue);
-                    //turn_queue.add_zero(commands.current_entity().unwrap());
+                    turn_queue.add_zero(commands.current_entity().unwrap());
                     world.grid.insert((x as i32, y as i32), world::Tile::main(commands.current_entity().unwrap()));
                 }
                 _ => continue,
@@ -222,6 +206,7 @@ fn player_movement(
         &mut mobility::Position,
         &mut turn::Head,
     )>,
+
 ) {
     for (player_entity, mut _player, walkable, mut position, _head) in players.iter_mut() {
         let mut attempted_to_walk = false;
@@ -315,8 +300,13 @@ fn turn_management(
     for _event in event_reader.iter(&events) {
         println!("Next Turn");
         let head_entity = turn_queue.peek().entity;
-        let head = entities.get(head_entity).unwrap().0;
-        commands.insert_one(head, turn::Head);
+        match entities.get(head_entity) {
+            Ok(head) => {commands.insert_one(head.0, turn::Head);}
+            Err(e) => {
+                turn_queue.remove_head();
+                println!("{:?}", e);
+            }
+        }
     }
 }
 
@@ -383,6 +373,52 @@ fn death(
     }
 }
 
+fn evil_idle (
+    mut commands: Commands,
+    mut turn_queue: ResMut<turn::Queue>,
+    mut events: ResMut<Events<turn::Done>>,
+    entities: Query<(Entity, &turn::Head, &turn::InQueue, &character::Evil)>,
+) {
+    for (entity, _head, _in_queue, _evil) in entities.iter() {
+        println!("Evil idles...");
+        turn_queue.head_makes_action(50);
+        commands.remove_one::<turn::Head>(entity);
+        events.send(turn::Done);
+    }
+}
+
+fn check_turn_order(
+    turn_queue: ResMut<turn::Queue>,
+    keyboard_input: Res<Input<KeyCode>>,
+) {
+    if keyboard_input.just_pressed(KeyCode::U) {
+        turn_queue.check_turn_order();
+    }
+}
+
+/*fn keyboard_event(
+    mut event_reader: Local<EventReader<KeyboardInput>>,
+    keyboard_input_events: Res<Events<KeyboardInput>>,
+) {
+    for event in event_reader.iter(&keyboard_input_events) {
+        match event {
+            KeyboardInput { scan_code: 72, key_code: up, state: ElementState::Pressed } => {
+                println!("Up")
+            }
+            KeyboardInput { scan_code: 77, key_code: right, state: ElementState::Pressed } => {
+                println!("Right")
+            }
+            KeyboardInput { scan_code: 80, key_code: down, state: ElementState::Pressed } => {
+                println!("Down")
+            }
+            KeyboardInput { scan_code: 75, key_code: left, state: ElementState::Pressed } => {
+                println!("Left")
+            }
+            _ => (),
+        }
+    }
+}*/
+
 fn main() {
     let loaded_config = config::load_config(format!("{}/config.ron", env!("CARGO_MANIFEST_DIR")));
     let world_stage = "world_stage";
@@ -395,7 +431,6 @@ fn main() {
             title: loaded_config.window_title().to_string(),
             ..Default::default()
         })
-        /*.add_resource(Array2::<Entity>(HashMap::new()))*/
         .add_startup_system(setup.system())
         .add_startup_stage(world_stage)
         .add_startup_system_to_stage(world_stage, world_setup.system())
@@ -410,6 +445,9 @@ fn main() {
         .add_system(equipment_management.system())
         .add_system(player_attack.system())
         .add_system(death.system())
+        .add_system(evil_idle.system())
+        .add_system(check_turn_order.system())
+        //.add_system(keyboard_event.system())
         .add_plugins(DefaultPlugins)
         .run();
 }

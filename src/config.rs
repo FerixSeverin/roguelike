@@ -1,6 +1,7 @@
 use ron::de::from_reader;
 use serde::Deserialize;
 use std::fs::File;
+use bevy::input::keyboard::KeyCode;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
