@@ -7,7 +7,7 @@ mod item;
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
-use bevy::input::keyboard::KeyboardInput;
+use bevy::render::camera::Camera;
 
 //Events
 
@@ -252,13 +252,24 @@ fn player_movement(
     }
 }
 
-fn position_translation(mut q: Query<(&mobility::Position, &mut Transform)>) {
+fn position_translation(
+    mut positions: Query<(&mobility::Position, &mut Transform)>,
+    players: Query<(&character::Player, &mobility::Position)>,
+    mut cameras: Query<(&Camera, &mut Transform)>,
+) {
     fn convert(p: i32, position_multiplier: i32) -> i32 {
         p * position_multiplier
     }
-    for (pos, mut transform) in q.iter_mut() {
+    for (pos, mut transform) in positions.iter_mut() {
         transform.translation =
             Vec3::new(convert(pos.x(), 20) as f32, convert(pos.y(), 20) as f32, 0.0);
+    }
+
+    for (_player, position) in players.iter() {
+        for (_camera, mut transform) in cameras.iter_mut() {
+            transform.translation =
+                Vec3::new(convert(position.x(), 20) as f32, convert(position.y(), 20) as f32, 0.0);
+        }
     }
 }
 
@@ -267,9 +278,9 @@ fn pit_mechanic(
     pits: Query<(Entity, &Pit, &mobility::Position)>,
     mut walkable_entities: Query<(Entity, &mut mobility::Walkable, &mobility::Position)>,
 ) {
-    for (_pit_entity, _pit, pit_positon) in pits.iter() {
+    for (_pit_entity, _pit, pit_position) in pits.iter() {
         for (walkable_entity, _walkable, walking_position) in walkable_entities.iter_mut() {
-            if pit_positon.eq(walking_position) {
+            if pit_position.eq(walking_position) {
                 println!("Fell into pit");
                 commands.remove_one::<mobility::Walkable>(walkable_entity);
             }
