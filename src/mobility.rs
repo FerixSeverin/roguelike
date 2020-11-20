@@ -36,5 +36,9 @@ impl Position {
         self.x += x;
         self.y += y;
     }
+
+    pub fn tuple(&self) -> (i32, i32) {
+        (self.x, self.y)
+    }
 }
 
