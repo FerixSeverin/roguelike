@@ -18,27 +18,32 @@ pub struct Blocking;
 
 #[derive(Hash, Eq, Default, Copy, Clone, PartialEq)]
 pub struct Position {
-    pub x: i32,
-    pub y: i32,
+    pub point: (i32, i32),
 }
 
 impl Position {
     pub fn zero() -> Self {
-        Self { x: 0, y: 0 }
+        Self { point: (0, 0) }
     }
 
-    pub fn teleport(&mut self, x: i32, y: i32) {
-        self.x = x;
-        self.y = y;
+    pub fn teleport(&mut self, point: (i32, i32)) {
+        self.point = point;
     }
 
-    pub fn translate(&mut self, x: i32, y: i32) {
-        self.x += x;
-        self.y += y;
+    pub fn translate(&mut self, point: (i32, i32)) {
+        self.point = (self.point.0 + point.0, self.point.1 + point.1);
     }
 
-    pub fn tuple(&self) -> (i32, i32) {
-        (self.x, self.y)
+    pub fn check(&self, point: (i32, i32)) -> (i32, i32) {
+        (self.point.0 + point.0, self.point.1 + point.1)
+    }
+
+    pub fn x(&self) -> i32 {
+        self.point.0
+    }
+
+    pub fn y(&self) -> i32 {
+        self.point.1
     }
 }
 

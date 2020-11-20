@@ -90,8 +90,7 @@ fn world_setup(
                         })
                         .with(mobility::Blocking)
                         .with(mobility::Position {
-                            x: x as i32,
-                            y: y as i32,
+                            point: (x as i32, y as i32)
                         });
                     world.grid.insert((x as i32, y as i32), world::Tile::main(commands.current_entity().unwrap()));
                 }
@@ -104,8 +103,7 @@ fn world_setup(
                         })
                         .with(character::Player)
                         .with(mobility::Position {
-                            x: x as i32,
-                            y: y as i32,
+                            point: (x as i32, y as i32)
                         })
                         .with(mobility::Walkable { step_size: 1 })
                         .with(character::Attributes::new(20, 5))
@@ -125,8 +123,7 @@ fn world_setup(
                         })
                         .with(Pit)
                         .with(mobility::Position {
-                            x: x as i32,
-                            y: y as i32,
+                            point: (x as i32, y as i32)
                         });
                     world.grid.insert((x as i32, y as i32), world::Tile::base(commands.current_entity().unwrap()));
                 }
@@ -139,8 +136,7 @@ fn world_setup(
                         })
                         .with(character::Evil)
                         .with(mobility::Position {
-                            x: x as i32,
-                            y: y as i32,
+                            point: (x as i32, y as i32)
                         })
                         .with(mobility::Walkable { step_size: 1 })
                         .with(character::Attributes::new(5, 0))
@@ -200,7 +196,7 @@ fn player_attack(
 
     if attempted_to_attack {
         for (_entity, _player, player_position, _head, _equipment) in players.iter_mut() {
-            let attack_position = mobility::Position { x: player_position.x + attack_direction.0, y: player_position.y + attack_direction.1 };
+            let attack_position = mobility::Position { point: (player_position.x() + attack_direction.0, player_position.y() + attack_direction.1) };
             for (_entity, _evil, mut attributes, target_position) in targets.iter_mut() {
                 if target_position.eq(&attack_position) {
                     attributes.health.modifier -= _equipment.get_weapon_damage(&weapons);
@@ -226,7 +222,6 @@ fn player_movement(
         &mut mobility::Position,
         &mut turn::Head,
     )>,
-    walls: Query<(Entity, &mobility::Blocking, &mobility::Position)>,
 ) {
     for (player_entity, mut _player, walkable, mut position, _head) in players.iter_mut() {
         let mut attempted_to_walk = false;
@@ -250,7 +245,7 @@ fn player_movement(
         }
 
         if attempted_to_walk {
-            match world.grid.get(&(position.x + position_change.0, position.y + position_change.1)) {
+            match world.grid.get(&position.check(position_change)) {
                 Some(tile) => match tile.main {
                     Some(_main_entity) => {
                         blocked = true;
@@ -261,12 +256,8 @@ fn player_movement(
             }
 
             if !blocked {
-
-                world.move_main(&(position.x, position.y), &(position.x + position_change.0, position.y + position_change.1));
-                println!("Walked!");
-                println!("{}, {}", position_change.0, position_change.1);
-                println!("{}, {} -> {}, {}", position.x, position.y, (position.x + position_change.0), (position.y + position_change.1));
-                position.translate(position_change.0, position_change.1);
+                world.move_main(&position.point, &(position.x() + position_change.0, position.y() + position_change.1));
+                position.translate(position_change);
                 if !turn_queue.head_makes_action(100) {
                     commands.remove_one::<turn::Head>(player_entity);
                     events.send(turn::Done);
@@ -282,7 +273,7 @@ fn position_translation(mut q: Query<(&mobility::Position, &mut Transform)>) {
     }
     for (pos, mut transform) in q.iter_mut() {
         transform.translation =
-            Vec3::new(convert(pos.x, 20) as f32, convert(pos.y, 20) as f32, 0.0);
+            Vec3::new(convert(pos.x(), 20) as f32, convert(pos.y(), 20) as f32, 0.0);
     }
 }
 
@@ -336,7 +327,6 @@ fn turn_tick(
     mut turns: Query<(Entity, &turn::Counter, &turn::InQueue, &turn::Head)>,
 ) {
     for (entity, _counter, _in_queue, _head) in turns.iter_mut() {
-        //println!("Turn ticked!");
         turn_queue.head_makes_action(100);
         commands.remove_one::<turn::Head>(entity);
         events.send(turn::Done);
@@ -382,7 +372,7 @@ fn death(
     for (entity, attributes, position) in entities.iter_mut() {
         if attributes.health.current() <= 0 {
             println!("Entity died!");
-            match world.grid.get_mut(&position.tuple()) {
+            match world.grid.get_mut(&position.point) {
                 Some(tile) => {
                     tile.clear_main();
                 }
