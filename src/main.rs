@@ -8,6 +8,7 @@ mod item;
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
 use bevy::render::camera::Camera;
+use rand::Rng;
 
 //Events
 
@@ -17,10 +18,13 @@ struct Materials {
     player: Handle<ColorMaterial>,
     wall: Handle<ColorMaterial>,
     pit: Handle<ColorMaterial>,
-    evil: Handle<ColorMaterial>,
+    hostile: Handle<ColorMaterial>,
+    friendly: Handle<ColorMaterial>,
 }
 
 //Work in progress components, will be moved later to separate files
+
+struct CameraTarget;
 
 struct Pit;
 
@@ -41,7 +45,8 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
         player: materials.add(Color::rgb_u8(0, 163, 204).into()),
         wall: materials.add(Color::rgb_u8(217, 217, 217).into()),
         pit: materials.add(Color::rgb_u8(64, 64, 64).into()),
-        evil: materials.add(Color::rgb_u8(237, 76, 47).into()),
+        hostile: materials.add(Color::rgb_u8(204, 41, 0).into()),
+        friendly: materials.add(Color::rgb_u8(51, 255, 178).into()),
     });
 }
 
@@ -86,7 +91,6 @@ fn world_setup(
                             sprite: Sprite::new(Vec2::new(20.0, 20.0)),
                             ..Default::default()
                         })
-                        .with(character::Player)
                         .with(mobility::Position {
                             point: (x as i32, y as i32)
                         })
@@ -94,9 +98,12 @@ fn world_setup(
                         .with(character::Attributes::new(20, 5))
                         .with(turn::InQueue)
                         .with(character::Inventory::starting_inventory(vec![knife_id, potion_id]))
-                        .with(character::Equipment::naked());
-                    turn_queue.add_zero(commands.current_entity().unwrap());
-                    world.grid.insert((x as i32, y as i32), world::Tile::main(commands.current_entity().unwrap()));
+                        .with(character::Equipment::naked())
+                        .with(character::AI::player())
+                        .with(CameraTarget);
+                    let current_entity = commands.current_entity().unwrap();
+                    turn_queue.add_zero(current_entity);
+                    world.grid.insert((x as i32, y as i32), world::Tile::main(current_entity));
                 }
                 'P' => {
                     commands
@@ -111,14 +118,18 @@ fn world_setup(
                         });
                     world.grid.insert((x as i32, y as i32), world::Tile::base(commands.current_entity().unwrap()));
                 }
-                'E' => {
+                'H' => {
                     commands
                         .spawn(SpriteComponents {
-                            material: materials.evil.clone(),
+                            material: materials.hostile.clone(),
                             sprite: Sprite::new(Vec2::new(18.0, 18.0)),
+                            transform: Transform {
+                                translation: Default::default(),
+                                rotation: Quat::from_xyzw(0.0, 0.0, 0.383,  0.924),
+                                scale: Vec3::new(1.0, 1.0, 0.0),
+                            },
                             ..Default::default()
                         })
-                        .with(character::Evil)
                         .with(mobility::Position {
                             point: (x as i32, y as i32)
                         })
@@ -128,10 +139,29 @@ fn world_setup(
                             name: "E1-L".to_string(),
                             serial_number: "XXXXXX-XX".to_string(),
                         })
-                        .with(turn::InQueue);
-                    turn_queue.add_zero(commands.current_entity().unwrap());
-                    world.grid.insert((x as i32, y as i32), world::Tile::main(commands.current_entity().unwrap()));
-                }
+                        .with(turn::InQueue)
+                        .with(character::AI::hostile());
+                    let current_entity = commands.current_entity().unwrap();
+                    turn_queue.add_zero(current_entity);
+                    world.grid.insert((x as i32, y as i32), world::Tile::main(current_entity));
+                },
+                'F' => {
+                    commands
+                        .spawn(SpriteComponents {
+                            material: materials.friendly.clone(),
+                            sprite: Sprite::new(Vec2::new(18.0, 18.0)),
+                            ..Default::default()
+                        })
+                        .with(mobility::Position {
+                            point: (x as i32, y as i32)
+                        })
+                        .with(character::Attributes::new(15, 5))
+                        .with(turn::InQueue)
+                        .with(character::AI::friendly());
+                    let current_entity = commands.current_entity().unwrap();
+                    turn_queue.add_zero(current_entity);
+                    world.grid.insert((x as i32, y as i32), world::Tile::main(current_entity));
+                },
                 _ => continue,
             };
         }
@@ -145,14 +175,14 @@ fn player_attack(
     mut turn_queue: ResMut<turn::Queue>,
     mut players: Query<(
         Entity,
-        &mut character::Player,
+        &mut character::AI,
         &mut mobility::Position,
         &mut turn::Head,
         &character::Equipment,
     )>,
     mut targets: Query<(
         Entity,
-        &character::Evil,
+        &character::AI,
         &mut character::Attributes,
         &mobility::Position,
     )>,
@@ -193,7 +223,7 @@ fn player_attack(
     }
 }
 
-fn player_movement(
+fn movement(
     mut commands: Commands,
     mut turn_queue: ResMut<turn::Queue>,
     mut world: ResMut<world::World>,
@@ -201,31 +231,43 @@ fn player_movement(
     mut events: ResMut<Events<turn::Done>>,
     mut players: Query<(
         Entity,
-        &mut character::Player,
+        &mut character::AI,
         &mobility::Walkable,
         &mut mobility::Position,
         &mut turn::Head,
     )>,
 
 ) {
-    for (player_entity, mut _player, walkable, mut position, _head) in players.iter_mut() {
+    for (entity, mut ai, walkable, mut position, _head) in players.iter_mut() {
         let mut attempted_to_walk = false;
         let mut blocked = false;
 
         let step_size = walkable.step_size;
         let mut position_change = (0, 0);
 
-        if keyboard_input.just_pressed(KeyCode::Up) {
-            position_change = (0, step_size);
-            attempted_to_walk = true;
-        } else if keyboard_input.just_pressed(KeyCode::Right) {
-            position_change = (step_size, 0);
-            attempted_to_walk = true;
-        } else if keyboard_input.just_pressed(KeyCode::Down) {
-            position_change = (0, -step_size);
-            attempted_to_walk = true;
-        } else if keyboard_input.just_pressed(KeyCode::Left) {
-            position_change = (-step_size, 0);
+        if ai.movement() == &character::MovementBehaviour::PlayerControlled {
+            if keyboard_input.just_pressed(KeyCode::Up) {
+                position_change = (0, step_size);
+                attempted_to_walk = true;
+            } else if keyboard_input.just_pressed(KeyCode::Right) {
+                position_change = (step_size, 0);
+                attempted_to_walk = true;
+            } else if keyboard_input.just_pressed(KeyCode::Down) {
+                position_change = (0, -step_size);
+                attempted_to_walk = true;
+            } else if keyboard_input.just_pressed(KeyCode::Left) {
+                position_change = (-step_size, 0);
+                attempted_to_walk = true;
+            }
+        } else if ai.movement() == &character::MovementBehaviour::Wander {
+            let direction = rand::thread_rng().gen_range(0, 4);
+            match direction {
+                0 => position_change = (0, step_size),
+                1 => position_change = (step_size, 0),
+                2 => position_change = (0, -step_size),
+                3 => position_change = (-step_size, 0),
+                _ => {}
+            }
             attempted_to_walk = true;
         }
 
@@ -244,7 +286,7 @@ fn player_movement(
                 world.move_main(&position.point, &(position.x() + position_change.0, position.y() + position_change.1));
                 position.translate(position_change);
                 if !turn_queue.head_makes_action(100) {
-                    commands.remove_one::<turn::Head>(player_entity);
+                    commands.remove_one::<turn::Head>(entity);
                     events.send(turn::Done);
                 }
             }
@@ -254,7 +296,7 @@ fn player_movement(
 
 fn position_translation(
     mut positions: Query<(&mobility::Position, &mut Transform)>,
-    players: Query<(&character::Player, &mobility::Position)>,
+    players: Query<(&CameraTarget, &mobility::Position)>,
     mut cameras: Query<(&Camera, &mut Transform)>,
 ) {
     fn convert(p: i32, position_multiplier: i32) -> i32 {
@@ -265,7 +307,7 @@ fn position_translation(
             Vec3::new(convert(pos.x(), 20) as f32, convert(pos.y(), 20) as f32, 0.0);
     }
 
-    for (_player, position) in players.iter() {
+    for (_target, position) in players.iter() {
         for (_camera, mut transform) in cameras.iter_mut() {
             transform.translation =
                 Vec3::new(convert(position.x(), 20) as f32, convert(position.y(), 20) as f32, 0.0);
@@ -291,7 +333,7 @@ fn pit_mechanic(
 fn get_legs(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
-    mut players: Query<(Entity, &character::Player)>,
+    mut players: Query<(Entity, &character::AI)>,
 ) {
     for (player_entity, _player) in players.iter_mut() {
         if keyboard_input.just_pressed(KeyCode::X) {
@@ -336,7 +378,7 @@ fn turn_tick(
 
 fn inventory_management(
     keyboard_input: Res<Input<KeyCode>>,
-    mut players: Query<(Entity, &character::Player, &mut character::Inventory, &mut character::Equipment)>,
+    mut players: Query<(Entity, &character::AI, &mut character::Inventory, &mut character::Equipment)>,
     items: Query<&item::Item>,
     equippable_items: Query<(&item::Item, &item::Equippable)>,
 ) {
@@ -355,7 +397,7 @@ fn inventory_management(
 
 fn equipment_management(
     keyboard_input: Res<Input<KeyCode>>,
-    players_with_equipment: Query<(Entity, &character::Player, &character::Equipment)>,
+    players_with_equipment: Query<(Entity, &character::AI, &character::Equipment)>,
     equippable_items: Query<(&item::Item, &item::Equippable)>,
 ) {
     for (_entity, _player, _equipment) in players_with_equipment.iter() {
@@ -384,11 +426,27 @@ fn death(
     }
 }
 
-fn evil_idle (
+fn friendly_idle (
     mut commands: Commands,
     mut turn_queue: ResMut<turn::Queue>,
     mut events: ResMut<Events<turn::Done>>,
-    entities: Query<(Entity, &turn::Head, &turn::InQueue, &character::Evil)>,
+    entities: Query<(Entity, &turn::Head, &turn::InQueue, &character::AI)>,
+) {
+    for (entity, _head, _in_queue, ai) in entities.iter() {
+        if ai.movement() == &character::MovementBehaviour::StandStill {
+            println!("Friendly idles...");
+            turn_queue.head_makes_action(50);
+            commands.remove_one::<turn::Head>(entity);
+            events.send(turn::Done);
+        }
+    }
+}
+
+/*fn evil_idle (
+    mut commands: Commands,
+    mut turn_queue: ResMut<turn::Queue>,
+    mut events: ResMut<Events<turn::Done>>,
+    entities: Query<(Entity, &turn::Head, &turn::InQueue, &character::AI)>,
 ) {
     for (entity, _head, _in_queue, _evil) in entities.iter() {
         println!("Evil idles...");
@@ -396,7 +454,7 @@ fn evil_idle (
         commands.remove_one::<turn::Head>(entity);
         events.send(turn::Done);
     }
-}
+}*/
 
 fn check_turn_order(
     turn_queue: ResMut<turn::Queue>,
@@ -446,19 +504,20 @@ fn main() {
         .add_startup_stage(world_stage)
         .add_startup_system_to_stage(world_stage, world_setup.system())
         .add_event::<turn::Done>()
-        .add_system(player_movement.system())
+        .add_system(movement.system())
         .add_system(position_translation.system())
-        .add_system(pit_mechanic.system())
-        .add_system(get_legs.system())
+        //.add_system(pit_mechanic.system())
+        //.add_system(get_legs.system())
         .add_system(turn_management.system())
         .add_system(turn_tick.system())
-        .add_system(inventory_management.system())
-        .add_system(equipment_management.system())
-        .add_system(player_attack.system())
+        //.add_system(inventory_management.system())
+        //.add_system(equipment_management.system())
+        //.add_system(player_attack.system())
         .add_system(death.system())
-        .add_system(evil_idle.system())
+        //.add_system(evil_idle.system())
         .add_system(check_turn_order.system())
         //.add_system(keyboard_event.system())
+        .add_system(friendly_idle.system())
         .add_plugins(DefaultPlugins)
         .run();
 }
